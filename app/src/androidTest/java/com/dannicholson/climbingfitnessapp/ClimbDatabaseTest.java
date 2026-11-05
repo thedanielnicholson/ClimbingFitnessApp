@@ -80,4 +80,29 @@ public class ClimbDatabaseTest {
                 TEST_DATABASE
         ).build();
     }
+
+    @Test
+    public void repository_savesCheckedClimbDetails() {
+        // Use the separate test database opened by setUp().
+        ClimbRepository repository =
+                new ClimbRepository(database.climbDao());
+
+        // Climb removes extra spaces and treats missing notes as empty text.
+        Climb climb = new Climb(" V3 ", 4, null);
+
+        long savedId = repository.save(climb);
+
+        // Check that the repository saved the cleaned details correctly.
+        List<ClimbEntity> climbs = repository.getAll();
+
+        assertEquals(1, climbs.size());
+
+        ClimbEntity savedClimb = climbs.get(0);
+
+        assertTrue(savedId > 0);
+        assertEquals(savedId, savedClimb.id);
+        assertEquals("V3", savedClimb.grade);
+        assertEquals(4, savedClimb.attempts);
+        assertEquals("", savedClimb.notes);
+    }
 }
