@@ -88,10 +88,14 @@ public class MainActivity extends AppCompatActivity {
         // The validator has checked that this text fits into an int.
         int attempts = Integer.parseInt(attemptsText);
 
-        // Show a preview. Permanent saving will come later.
-        String summary = "Grade: " + grade
-                + "\nAttempts: " + attempts
-                + "\nNotes: " + (notes.isEmpty() ? "None" : notes);
+        // Keep the checked details together as one climb.
+        Climb climb = new Climb(grade, attempts, notes);
+
+        // Read the details from the object to build the preview.
+        String summary = "Grade: " + climb.getGrade()
+                + "\nAttempts: " + climb.getAttempts()
+                + "\nNotes: "
+                + (climb.getNotes().isEmpty() ? "None" : climb.getNotes());
 
         summaryText.setText(summary);
     }
