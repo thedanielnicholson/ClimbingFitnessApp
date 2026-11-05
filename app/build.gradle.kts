@@ -40,4 +40,10 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)
+
+    // Room stores our records in a local SQLite database.
+    implementation("androidx.room:room-runtime:2.8.5")
+
+// Generates the database code from our Java annotations.
+    annotationProcessor("androidx.room:room-compiler:2.8.5")
 }
