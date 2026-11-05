@@ -18,6 +18,9 @@ public class MainActivity extends AppCompatActivity {
     private EditText notesInput;
     private TextView summaryText;
 
+    // Keep the input checks in a separate class so we can test them easily.
+    private final ClimbValidator validator = new ClimbValidator();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -54,37 +57,38 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void previewClimb() {
+        // Read the form and remove spaces from the ends of each value.
         String grade = gradeInput.getText().toString().trim();
         String attemptsText = attemptsInput.getText().toString().trim();
         String notes = notesInput.getText().toString().trim();
 
-        // Remove the previous preview and validation messages.
+        // Clear the previous result before checking this entry.
         summaryText.setText("");
         gradeInput.setError(null);
         attemptsInput.setError(null);
 
-        if (grade.isEmpty()) {
-            gradeInput.setError("Enter a grade");
+        // Ask the validator to check the grade, then show any error.
+        String gradeError = validator.getGradeError(grade);
+
+        if (gradeError != null) {
+            gradeInput.setError(gradeError);
             gradeInput.requestFocus();
             return;
         }
 
-        int attempts;
+        // Check the attempt count before trying to use it.
+        String attemptsError = validator.getAttemptsError(attemptsText);
 
-        try {
-            attempts = Integer.parseInt(attemptsText);
-        } catch (NumberFormatException exception) {
-            attemptsInput.setError("Enter a valid whole number");
+        if (attemptsError != null) {
+            attemptsInput.setError(attemptsError);
             attemptsInput.requestFocus();
             return;
         }
 
-        if (attempts < 1) {
-            attemptsInput.setError("Enter at least 1 attempt");
-            attemptsInput.requestFocus();
-            return;
-        }
+        // The validator has checked that this text fits into an int.
+        int attempts = Integer.parseInt(attemptsText);
 
+        // Show a preview. Permanent saving will come later.
         String summary = "Grade: " + grade
                 + "\nAttempts: " + attempts
                 + "\nNotes: " + (notes.isEmpty() ? "None" : notes);
