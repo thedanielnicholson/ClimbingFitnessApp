@@ -44,6 +44,9 @@ dependencies {
     // Room stores our records in a local SQLite database.
     implementation("androidx.room:room-runtime:2.8.5")
 
-// Generates the database code from our Java annotations.
+    // Generates the database code from our Java annotations.
     annotationProcessor("androidx.room:room-compiler:2.8.5")
+
+    // Lets UI tests wait until our background database work has finished.
+    implementation("androidx.test.espresso:espresso-idling-resource:3.7.0")
 }
