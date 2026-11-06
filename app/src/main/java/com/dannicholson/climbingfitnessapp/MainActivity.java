@@ -38,16 +38,14 @@ public class MainActivity extends AppCompatActivity {
     private TextView workoutHistoryText;
     private ClimbDatabase database;
     private ClimbRepository repository;
-
     private final ClimbValidator validator = new ClimbValidator();
-
     // Run database jobs one at a time, away from the screen thread.
     private final ExecutorService databaseExecutor =
             Executors.newSingleThreadExecutor();
-
     // Lets Espresso know when database work and its screen update are done.
     private final CountingIdlingResource databaseWork =
             new CountingIdlingResource("Climb database work");
+    private LinearLayout workoutRows;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,11 +96,13 @@ public class MainActivity extends AppCompatActivity {
 
         logWorkoutButton = findViewById(R.id.logWorkoutButton);
         workoutHistoryText = findViewById(R.id.workoutHistoryText);
+        workoutRows = findViewById(R.id.workoutRows);
 
-        logWorkoutButton.setOnClickListener(view -> showWorkoutForm());
+        // Passing null opens a blank form for a new exercise.
+        logWorkoutButton.setOnClickListener(view -> showWorkoutForm(null));
 
-        // Open the screen with the exercises already saved in Room.
-        loadWorkoutHistory(null);
+        // The empty action means just load the saved exercises.
+        runWorkoutTask(() -> {}, "Could not load saved exercises.");
     }
 
     private Climb readClimbFromForm() {
@@ -383,7 +383,7 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    private void showWorkoutForm() {
+    private void showWorkoutForm(WorkoutEntity savedEntry) {
         LinearLayout fields = new LinearLayout(this);
         fields.setOrientation(LinearLayout.VERTICAL);
 
@@ -397,18 +397,29 @@ public class MainActivity extends AppCompatActivity {
         EditText weight = addWorkoutField(fields, "Weight in kg (0 for bodyweight)",
                 InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
 
+        // A saved entry means we're editing. Otherwise, the fields start blank.
+        boolean editing = savedEntry != null;
+
+        if (editing) {
+            exercise.setText(savedEntry.exercise);
+            sets.setText(String.valueOf(savedEntry.sets));
+            reps.setText(String.valueOf(savedEntry.reps));
+            weight.setText(String.valueOf(savedEntry.weightKg));
+        }
+
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Log exercise")
+                .setTitle(editing ? "Edit exercise" : "Log exercise")
                 .setView(fields)
                 .setNegativeButton("Cancel", null)
-                .setPositiveButton("Save exercise", null)
+                .setPositiveButton(editing ? "Save changes" : "Save exercise", null)
                 .create();
 
         dialog.show();
 
-        // Keep the form open if a field needs correcting.
+        // Keep the dialog open if an input needs correcting.
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
             String name = exercise.getText().toString().trim();
+
             if (name.isEmpty()) {
                 exercise.setError("Enter an exercise name");
                 exercise.requestFocus();
@@ -439,8 +450,20 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
+            WorkoutEntity entry = new WorkoutEntity(name, setCount, repCount, weightKg);
+
             dialog.dismiss();
-            loadWorkoutHistory(new WorkoutEntity(name, setCount, repCount, weightKg));
+            runWorkoutTask(() -> {
+                if (editing) {
+                    // Keep the original ID so Room updates the selected row.
+                    entry.id = savedEntry.id;
+                    if (database.workoutDao().update(entry) != 1) {
+                        throw new IllegalStateException("Exercise no longer exists");
+                    }
+                } else {
+                    database.workoutDao().insert(entry);
+                }
+            }, "Could not save the exercise. Please try again.");
         });
     }
 
@@ -468,48 +491,27 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
-    private void loadWorkoutHistory(WorkoutEntity newEntry) {
+    private void runWorkoutTask(Runnable change, String failureMessage) {
         logWorkoutButton.setEnabled(false);
         databaseWork.increment();
 
         databaseExecutor.execute(() -> {
             try {
                 List<WorkoutEntity> entries = database.runInTransaction(() -> {
-                    // A new entry means we're saving before refreshing the list.
-                    if (newEntry != null) {
-                        database.workoutDao().insert(newEntry);
-                    }
+                    // Apply the change, then read the updated history.
+                    change.run();
                     return database.workoutDao().getAll();
                 });
 
-                StringBuilder history = new StringBuilder();
-                for (WorkoutEntity entry : entries) {
-                    if (history.length() > 0) {
-                        history.append('\n');
-                    }
-
-                    history.append(entry.exercise)
-                            .append(" · ").append(entry.sets)
-                            .append(" × ").append(entry.reps)
-                            .append(" · ").append(entry.weightKg).append(" kg");
-                }
-
-                String result = entries.isEmpty()
-                        ? "No exercises saved yet."
-                        : history.toString();
-
-                finishWorkoutTask(result, null);
+                finishWorkoutTask(entries, null);
             } catch (Exception exception) {
-                Log.e("WorkoutDatabase", "Could not load or save exercises", exception);
-                String message = newEntry == null
-                        ? "Could not load saved exercises."
-                        : "Could not save the exercise. Please try again.";
-                finishWorkoutTask(null, message);
+                Log.e("WorkoutDatabase", "Workout operation failed", exception);
+                finishWorkoutTask(null, failureMessage);
             }
         });
     }
 
-    private void finishWorkoutTask(String history, String error) {
+    private void finishWorkoutTask(List<WorkoutEntity> entries, String error) {
         runOnUiThread(() -> {
             try {
                 if (isFinishing() || isDestroyed()) {
@@ -517,9 +519,9 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 if (error == null) {
-                    workoutHistoryText.setText(history);
+                    renderWorkoutHistory(entries);
                 } else {
-                    if (workoutHistoryText.getText().toString().equals("Loading exercises...")) {
+                    if (workoutRows.getChildCount() == 0) {
                         workoutHistoryText.setText(error);
                     }
                     Toast.makeText(this, error, Toast.LENGTH_SHORT).show();
@@ -527,9 +529,64 @@ public class MainActivity extends AppCompatActivity {
 
                 logWorkoutButton.setEnabled(true);
             } finally {
-                // Espresso can continue once the screen has received the result.
+                // Espresso can continue once the screen has handled the result.
                 databaseWork.decrement();
             }
         });
+    }
+
+    private void renderWorkoutHistory(List<WorkoutEntity> entries) {
+        // Rebuild the buttons from the latest database rows.
+        workoutRows.removeAllViews();
+
+        if (entries.isEmpty()) {
+            workoutHistoryText.setText("No exercises saved yet.");
+            workoutHistoryText.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        workoutHistoryText.setVisibility(View.GONE);
+
+        for (WorkoutEntity entry : entries) {
+            Button row = new Button(this);
+            row.setAllCaps(false);
+            row.setText(formatWorkout(entry));
+            row.setOnClickListener(view -> showWorkoutDetails(entry));
+            workoutRows.addView(row);
+        }
+    }
+
+    private String formatWorkout(WorkoutEntity entry) {
+        return entry.exercise + " · " + entry.sets + " × " + entry.reps
+                + " · " + entry.weightKg + " kg";
+    }
+
+    private void showWorkoutDetails(WorkoutEntity entry) {
+        // Wait for the history refresh before opening an entry.
+        if (!logWorkoutButton.isEnabled()) {
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Exercise details")
+                .setMessage(formatWorkout(entry))
+                .setNeutralButton("Edit", (dialog, which) -> showWorkoutForm(entry))
+                .setNegativeButton("Delete", (dialog, which) -> confirmDeleteWorkout(entry))
+                .setPositiveButton("Close", null)
+                .show();
+    }
+
+    private void confirmDeleteWorkout(WorkoutEntity entry) {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete exercise?")
+                .setMessage(formatWorkout(entry))
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete", (dialog, which) ->
+                        runWorkoutTask(() -> {
+                            if (database.workoutDao().delete(entry) != 1) {
+                                throw new IllegalStateException("Exercise no longer exists");
+                            }
+                        }, "Could not delete the exercise. Please try again."))
+                .show();
     }
 }
