@@ -132,4 +132,19 @@ public class ClimbDatabaseTest {
         assertEquals(2, edited.attempts);
         assertEquals("Edited notes", edited.notes);
     }
+
+    @Test
+    public void delete_removesOnlyTheSelectedClimb() {
+        ClimbRepository repository = new ClimbRepository(database.climbDao());
+
+        // Save two identical climbs to check that deletion uses the ID.
+        long selectedId = repository.save(new Climb("V3", 4, "Overhang"));
+        long otherId = repository.save(new Climb("V3", 4, "Overhang"));
+
+        repository.delete(selectedId);
+
+        List<ClimbEntity> remaining = repository.getAll();
+        assertEquals(1, remaining.size());
+        assertEquals(otherId, remaining.get(0).id);
+    }
 }

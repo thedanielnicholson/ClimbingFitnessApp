@@ -25,4 +25,8 @@ public interface ClimbDao {
     @Query("UPDATE climbs SET grade = :grade, attempts = :attempts, "
             + "notes = :notes WHERE id = :id")
     int update(long id, String grade, int attempts, String notes);
+
+    // Delete only the row with the selected climb's ID.
+    @Query("DELETE FROM climbs WHERE id = :id")
+    int deleteById(long id);
 }

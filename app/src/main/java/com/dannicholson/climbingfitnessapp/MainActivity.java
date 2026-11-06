@@ -197,6 +197,7 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage(formatClimb(climb.grade, climb.attempts, climb.notes))
                 .setPositiveButton("Close", null)
                 .setNeutralButton("Edit", (dialog, which) -> showEditClimbDialog(climb))
+                .setNegativeButton("Delete", (dialog, which) -> confirmDeleteClimb(climb))
                 .show();
     }
 
@@ -343,6 +344,32 @@ public class MainActivity extends AppCompatActivity {
                 }),
                 "Climb updated.",
                 "Could not update the climb. Please try again."
+        );
+    }
+
+    private void confirmDeleteClimb(ClimbEntity climb) {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete climb?")
+                .setMessage(formatClimb(climb.grade, climb.attempts, climb.notes))
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete", (dialog, which) -> deleteClimb(climb.id))
+                .show();
+    }
+
+    private void deleteClimb(long id) {
+        // The Save button is disabled while a database task is running.
+        if (!saveButton.isEnabled()) {
+            return;
+        }
+
+        runDatabaseTask(
+                () -> database.runInTransaction(() -> {
+                    repository.delete(id);
+                    // Read the remaining rows so the screen can rebuild the list.
+                    return repository.getAll();
+                }),
+                "Climb deleted.",
+                "Could not delete the climb. Please try again."
         );
     }
 }

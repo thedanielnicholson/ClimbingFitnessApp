@@ -44,4 +44,12 @@ public class ClimbRepository {
             throw new IllegalStateException("The selected climb could not be found.");
         }
     }
+
+    public void delete(long id) {
+        int deletedRows = climbDao.deleteById(id);
+
+        if (deletedRows != 1) {
+            throw new IllegalStateException("The selected climb could not be found.");
+        }
+    }
 }
