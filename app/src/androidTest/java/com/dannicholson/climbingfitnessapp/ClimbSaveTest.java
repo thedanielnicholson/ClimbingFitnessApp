@@ -1,7 +1,6 @@
 package com.dannicholson.climbingfitnessapp;
 
 import android.content.Context;
-
 import androidx.room.Room;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.core.app.ApplicationProvider;
@@ -9,12 +8,11 @@ import androidx.test.espresso.Espresso;
 import androidx.test.espresso.IdlingRegistry;
 import androidx.test.espresso.IdlingResource;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.action.ViewActions.closeSoftKeyboard;
@@ -96,10 +94,14 @@ public class ClimbSaveTest {
         closeScreen();
         openScreen();
 
-        onView(withId(R.id.historyText))
-                .check(matches(withText(
-                        "Grade: V3\nAttempts: 4\nNotes: Steep overhang"
-                )));
+        // After reopening, the saved climb should have a tappable history row.
+        onView(withText("V3 · 4 attempts"))
+                .perform(scrollTo(), click());
+
+        // Check that tapping the row shows the details we saved.
+        onView(withText("Grade: V3\nAttempts: 4\nNotes: Steep overhang"))
+                .inRoot(isDialog())
+                .check(matches(withText("Grade: V3\nAttempts: 4\nNotes: Steep overhang")));
     }
 
     @Test

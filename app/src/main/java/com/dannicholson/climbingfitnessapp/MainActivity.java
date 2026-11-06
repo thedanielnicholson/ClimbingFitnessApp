@@ -17,6 +17,10 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import android.view.View;
+import android.widget.LinearLayout;
+
+import androidx.appcompat.app.AlertDialog;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -26,6 +30,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView summaryText;
     private TextView saveStatus;
     private TextView historyText;
+    private LinearLayout historyRows;
     private Button saveButton;
 
     private ClimbDatabase database;
@@ -70,6 +75,7 @@ public class MainActivity extends AppCompatActivity {
         summaryText = findViewById(R.id.summaryText);
         saveStatus = findViewById(R.id.saveStatus);
         historyText = findViewById(R.id.historyText);
+        historyRows = findViewById(R.id.historyRows);
         saveButton = findViewById(R.id.saveButton);
 
         Button previewButton = findViewById(R.id.previewButton);
@@ -80,9 +86,9 @@ public class MainActivity extends AppCompatActivity {
         previewButton.setOnClickListener(view -> previewClimb());
         saveButton.setOnClickListener(view -> saveClimb());
 
-        // Reload saved records whenever this screen is created.
+        // Reload saved climbs whenever this screen opens.
         runDatabaseTask(
-                () -> buildHistoryText(),
+                repository::getAll,
                 "",
                 "Could not load climbs. Reopen the screen to try again."
         );
@@ -150,36 +156,46 @@ public class MainActivity extends AppCompatActivity {
                      * If either operation fails, the transaction rolls back.
                      */
                     repository.save(climb);
-                    return buildHistoryText();
+                    return repository.getAll();
                 }),
                 "Climb saved.",
                 "Could not save the climb. Please try again."
         );
     }
 
-    private String buildHistoryText() {
-        List<ClimbEntity> climbs = repository.getAll();
+    private void renderHistory(List<ClimbEntity> climbs) {
+        // We're rebuilding the list after a load or save.
+        // Clear the old buttons so entries don't appear twice.
+        historyRows.removeAllViews();
 
         if (climbs.isEmpty()) {
-            return "No climbs saved yet.";
+            historyText.setText("No climbs saved yet.");
+            historyText.setVisibility(View.VISIBLE);
+            return;
         }
 
-        StringBuilder history = new StringBuilder();
+        historyText.setVisibility(View.GONE);
 
         for (ClimbEntity climb : climbs) {
-            // Leave a blank line between saved entries.
-            if (history.length() > 0) {
-                history.append("\n\n");
-            }
+            Button row = new Button(this);
+            String attemptLabel = climb.attempts == 1 ? " attempt" : " attempts";
 
-            history.append(formatClimb(
-                    climb.grade,
-                    climb.attempts,
-                    climb.notes
-            ));
+            row.setAllCaps(false);
+            row.setText(climb.grade + " · " + climb.attempts + attemptLabel);
+
+            // This button opens the row it was created for, even if
+            // another climb has the same grade and number of attempts.
+            row.setOnClickListener(view -> showClimbDetails(climb));
+            historyRows.addView(row);
         }
+    }
 
-        return history.toString();
+    private void showClimbDetails(ClimbEntity climb) {
+        new AlertDialog.Builder(this)
+                .setTitle("Climb details")
+                .setMessage(formatClimb(climb.grade, climb.attempts, climb.notes))
+                .setPositiveButton("Close", null)
+                .show();
     }
 
     private String formatClimb(String grade, int attempts, String notes) {
@@ -193,44 +209,38 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void runDatabaseTask(
-            Callable<String> task,
+            Callable<List<ClimbEntity>> task,
             String successMessage,
             String failureMessage
     ) {
-        // Prevent another save while a database job is running.
         saveButton.setEnabled(false);
         databaseWork.increment();
 
         databaseExecutor.execute(() -> {
             try {
-                // This part runs on the background thread.
-                String history = task.call();
-
-                finishDatabaseTask(history, successMessage);
+                // Read the saved rows on the background thread.
+                List<ClimbEntity> climbs = task.call();
+                finishDatabaseTask(climbs, successMessage);
             } catch (Exception exception) {
-                // Keep the technical details in Logcat for debugging.
                 Log.e("ClimbDatabase", "Database operation failed", exception);
-
                 finishDatabaseTask(null, failureMessage);
             }
         });
     }
 
-    private void finishDatabaseTask(String history, String message) {
-        // Android screen components must be updated on the main thread.
+    private void finishDatabaseTask(List<ClimbEntity> climbs, String message) {
         runOnUiThread(() -> {
             try {
-                // The user may have closed this screen while the job ran.
                 if (!isFinishing() && !isDestroyed()) {
-                    if (history != null) {
-                        historyText.setText(history);
+                    // A failed task returns null, so keep the history already shown.
+                    if (climbs != null) {
+                        renderHistory(climbs);
                     }
 
                     saveStatus.setText(message);
                     saveButton.setEnabled(true);
                 }
             } finally {
-                // Mark the job complete even if the screen has closed.
                 databaseWork.decrement();
             }
         });
