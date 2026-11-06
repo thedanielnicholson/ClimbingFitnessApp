@@ -34,4 +34,14 @@ public class ClimbRepository {
         // Return the saved rows, newest first.
         return climbDao.getAll();
     }
+
+    public void update(long id, Climb climb) {
+        int updatedRows = climbDao.update(
+                id, climb.getGrade(), climb.getAttempts(), climb.getNotes()
+        );
+
+        if (updatedRows != 1) {
+            throw new IllegalStateException("The selected climb could not be found.");
+        }
+    }
 }

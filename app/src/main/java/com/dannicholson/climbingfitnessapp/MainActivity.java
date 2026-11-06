@@ -21,6 +21,7 @@ import android.view.View;
 import android.widget.LinearLayout;
 
 import androidx.appcompat.app.AlertDialog;
+import android.text.InputType;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -195,6 +196,7 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle("Climb details")
                 .setMessage(formatClimb(climb.grade, climb.attempts, climb.notes))
                 .setPositiveButton("Close", null)
+                .setNeutralButton("Edit", (dialog, which) -> showEditClimbDialog(climb))
                 .show();
     }
 
@@ -258,5 +260,89 @@ public class MainActivity extends AppCompatActivity {
 
         // The shared database belongs to the app, so leave it open.
         super.onDestroy();
+    }
+
+    private void showEditClimbDialog(ClimbEntity savedClimb) {
+        // Wait for any current save or history load to finish.
+        if (!saveButton.isEnabled()) {
+            return;
+        }
+
+        LinearLayout fields = new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+
+        int padding = Math.round(24 * getResources().getDisplayMetrics().density);
+        fields.setPadding(padding, 0, padding, 0);
+
+        EditText grade = new EditText(this);
+        grade.setHint("Grade");
+        grade.setSingleLine(true);
+        grade.setText(savedClimb.grade);
+        fields.addView(grade);
+
+        EditText attempts = new EditText(this);
+        attempts.setHint("Number of attempts");
+        attempts.setInputType(InputType.TYPE_CLASS_NUMBER);
+        attempts.setText(String.valueOf(savedClimb.attempts));
+        fields.addView(attempts);
+
+        EditText notes = new EditText(this);
+        notes.setHint("Notes (optional)");
+        notes.setText(savedClimb.notes);
+        fields.addView(notes);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Edit climb")
+                .setView(fields)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save changes", null)
+                .create();
+
+        dialog.show();
+
+        // Set the listener after show() so we can keep the dialog
+        // open when the user needs to correct a field.
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String gradeText = grade.getText().toString().trim();
+            String attemptsText = attempts.getText().toString().trim();
+
+            grade.setError(null);
+            attempts.setError(null);
+
+            String gradeError = validator.getGradeError(gradeText);
+            if (gradeError != null) {
+                grade.setError(gradeError);
+                grade.requestFocus();
+                return;
+            }
+
+            String attemptsError = validator.getAttemptsError(attemptsText);
+            if (attemptsError != null) {
+                attempts.setError(attemptsError);
+                attempts.requestFocus();
+                return;
+            }
+
+            Climb editedClimb = new Climb(
+                    gradeText,
+                    Integer.parseInt(attemptsText),
+                    notes.getText().toString()
+            );
+
+            dialog.dismiss();
+            updateClimb(savedClimb.id, editedClimb);
+        });
+    }
+
+    private void updateClimb(long id, Climb editedClimb) {
+        runDatabaseTask(
+                () -> database.runInTransaction(() -> {
+                    repository.update(id, editedClimb);
+                    // Return fresh rows so the history shows the edit.
+                    return repository.getAll();
+                }),
+                "Climb updated.",
+                "Could not update the climb. Please try again."
+        );
     }
 }

@@ -20,4 +20,9 @@ public interface ClimbDao {
     // Read every saved climb, with the most recently inserted first.
     @Query("SELECT * FROM climbs ORDER BY id DESC")
     List<ClimbEntity> getAll();
+
+    // Update only the row with the selected climb's ID.
+    @Query("UPDATE climbs SET grade = :grade, attempts = :attempts, "
+            + "notes = :notes WHERE id = :id")
+    int update(long id, String grade, int attempts, String notes);
 }

@@ -105,4 +105,31 @@ public class ClimbDatabaseTest {
         assertEquals(4, savedClimb.attempts);
         assertEquals("", savedClimb.notes);
     }
+
+    @Test
+    public void update_changesOnlyTheSelectedClimb() {
+        ClimbRepository repository = new ClimbRepository(database.climbDao());
+
+        // Save two matching climbs so the test proves the ID selects the row.
+        long selectedId = repository.save(new Climb("V3", 4, "Overhang"));
+        long otherId = repository.save(new Climb("V3", 4, "Overhang"));
+
+        repository.update(selectedId, new Climb("V4", 2, "Edited notes"));
+
+        List<ClimbEntity> climbs = repository.getAll();
+        assertEquals(2, climbs.size());
+
+        // History is ordered by ID, newest first.
+        ClimbEntity other = climbs.get(0);
+        assertEquals(otherId, other.id);
+        assertEquals("V3", other.grade);
+        assertEquals(4, other.attempts);
+        assertEquals("Overhang", other.notes);
+
+        ClimbEntity edited = climbs.get(1);
+        assertEquals(selectedId, edited.id);
+        assertEquals("V4", edited.grade);
+        assertEquals(2, edited.attempts);
+        assertEquals("Edited notes", edited.notes);
+    }
 }
