@@ -22,6 +22,7 @@ import android.widget.LinearLayout;
 
 import androidx.appcompat.app.AlertDialog;
 import android.text.InputType;
+import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -33,7 +34,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView historyText;
     private LinearLayout historyRows;
     private Button saveButton;
-
+    private Button logWorkoutButton;
+    private TextView workoutHistoryText;
     private ClimbDatabase database;
     private ClimbRepository repository;
 
@@ -93,6 +95,14 @@ public class MainActivity extends AppCompatActivity {
                 "",
                 "Could not load climbs. Reopen the screen to try again."
         );
+
+        logWorkoutButton = findViewById(R.id.logWorkoutButton);
+        workoutHistoryText = findViewById(R.id.workoutHistoryText);
+
+        logWorkoutButton.setOnClickListener(view -> showWorkoutForm());
+
+        // Open the screen with the exercises already saved in Room.
+        loadWorkoutHistory(null);
     }
 
     private Climb readClimbFromForm() {
@@ -371,5 +381,155 @@ public class MainActivity extends AppCompatActivity {
                 "Climb deleted.",
                 "Could not delete the climb. Please try again."
         );
+    }
+
+    private void showWorkoutForm() {
+        LinearLayout fields = new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+
+        int padding = Math.round(24 * getResources().getDisplayMetrics().density);
+        fields.setPadding(padding, 0, padding, 0);
+
+        EditText exercise = addWorkoutField(fields, "Exercise",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        EditText sets = addWorkoutField(fields, "Sets", InputType.TYPE_CLASS_NUMBER);
+        EditText reps = addWorkoutField(fields, "Reps per set", InputType.TYPE_CLASS_NUMBER);
+        EditText weight = addWorkoutField(fields, "Weight in kg (0 for bodyweight)",
+                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Log exercise")
+                .setView(fields)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save exercise", null)
+                .create();
+
+        dialog.show();
+
+        // Keep the form open if a field needs correcting.
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String name = exercise.getText().toString().trim();
+            if (name.isEmpty()) {
+                exercise.setError("Enter an exercise name");
+                exercise.requestFocus();
+                return;
+            }
+
+            Integer setCount = readPositiveCount(sets);
+            if (setCount == null) {
+                return;
+            }
+
+            Integer repCount = readPositiveCount(reps);
+            if (repCount == null) {
+                return;
+            }
+
+            double weightKg;
+            try {
+                String weightText = weight.getText().toString().trim().replace(',', '.');
+                weightKg = Double.parseDouble(weightText);
+            } catch (NumberFormatException exception) {
+                weightKg = Double.NaN;
+            }
+
+            if (!Double.isFinite(weightKg) || weightKg < 0) {
+                weight.setError("Enter a weight of 0 kg or more");
+                weight.requestFocus();
+                return;
+            }
+
+            dialog.dismiss();
+            loadWorkoutHistory(new WorkoutEntity(name, setCount, repCount, weightKg));
+        });
+    }
+
+    private EditText addWorkoutField(LinearLayout fields, String hint, int inputType) {
+        EditText field = new EditText(this);
+        field.setSingleLine(true);
+        field.setHint(hint);
+        field.setInputType(inputType);
+        fields.addView(field);
+        return field;
+    }
+
+    private Integer readPositiveCount(EditText field) {
+        try {
+            int count = Integer.parseInt(field.getText().toString().trim());
+            if (count > 0) {
+                return count;
+            }
+        } catch (NumberFormatException exception) {
+            // Blank text and values too large for an int get the same message.
+        }
+
+        field.setError("Enter a whole number greater than 0");
+        field.requestFocus();
+        return null;
+    }
+
+    private void loadWorkoutHistory(WorkoutEntity newEntry) {
+        logWorkoutButton.setEnabled(false);
+        databaseWork.increment();
+
+        databaseExecutor.execute(() -> {
+            try {
+                List<WorkoutEntity> entries = database.runInTransaction(() -> {
+                    // A new entry means we're saving before refreshing the list.
+                    if (newEntry != null) {
+                        database.workoutDao().insert(newEntry);
+                    }
+                    return database.workoutDao().getAll();
+                });
+
+                StringBuilder history = new StringBuilder();
+                for (WorkoutEntity entry : entries) {
+                    if (history.length() > 0) {
+                        history.append('\n');
+                    }
+
+                    history.append(entry.exercise)
+                            .append(" · ").append(entry.sets)
+                            .append(" × ").append(entry.reps)
+                            .append(" · ").append(entry.weightKg).append(" kg");
+                }
+
+                String result = entries.isEmpty()
+                        ? "No exercises saved yet."
+                        : history.toString();
+
+                finishWorkoutTask(result, null);
+            } catch (Exception exception) {
+                Log.e("WorkoutDatabase", "Could not load or save exercises", exception);
+                String message = newEntry == null
+                        ? "Could not load saved exercises."
+                        : "Could not save the exercise. Please try again.";
+                finishWorkoutTask(null, message);
+            }
+        });
+    }
+
+    private void finishWorkoutTask(String history, String error) {
+        runOnUiThread(() -> {
+            try {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+
+                if (error == null) {
+                    workoutHistoryText.setText(history);
+                } else {
+                    if (workoutHistoryText.getText().toString().equals("Loading exercises...")) {
+                        workoutHistoryText.setText(error);
+                    }
+                    Toast.makeText(this, error, Toast.LENGTH_SHORT).show();
+                }
+
+                logWorkoutButton.setEnabled(true);
+            } finally {
+                // Espresso can continue once the screen has received the result.
+                databaseWork.decrement();
+            }
+        });
     }
 }
