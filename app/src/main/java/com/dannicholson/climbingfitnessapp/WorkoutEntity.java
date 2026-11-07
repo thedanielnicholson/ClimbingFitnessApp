@@ -15,6 +15,8 @@ public class WorkoutEntity {
     public int sets;
     public int reps;
     public double weightKg;
+    // ISO date, such as 2026-11-07. Older entries have no recorded date.
+    public String loggedDate;
 
     public WorkoutEntity(@NonNull String exercise, int sets, int reps,
                          double weightKg) {

@@ -29,7 +29,10 @@ public final class ClimbDatabaseProvider {
                     context.getApplicationContext(),
                     ClimbDatabase.class,
                     "climbing-fitness.db"
-            ).addMigrations(ClimbDatabase.MIGRATION_1_2).build();
+            ).addMigrations(
+                    ClimbDatabase.MIGRATION_1_2,
+                    ClimbDatabase.MIGRATION_2_3
+            ).build();
         }
 
         return appDatabase;

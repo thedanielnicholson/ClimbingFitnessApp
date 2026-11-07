@@ -23,6 +23,9 @@ import android.widget.LinearLayout;
 import androidx.appcompat.app.AlertDialog;
 import android.text.InputType;
 import android.widget.Toast;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -204,7 +207,8 @@ public class MainActivity extends AppCompatActivity {
     private void showClimbDetails(ClimbEntity climb) {
         new AlertDialog.Builder(this)
                 .setTitle("Climb details")
-                .setMessage(formatClimb(climb.grade, climb.attempts, climb.notes))
+                .setMessage(formatClimb(climb.grade, climb.attempts, climb.notes)
+                        + "\nLogged: " + formatLoggedDate(climb.loggedDate))
                 .setPositiveButton("Close", null)
                 .setNeutralButton("Edit", (dialog, which) -> showEditClimbDialog(climb))
                 .setNegativeButton("Delete", (dialog, which) -> confirmDeleteClimb(climb))
@@ -452,6 +456,9 @@ public class MainActivity extends AppCompatActivity {
 
             WorkoutEntity entry = new WorkoutEntity(name, setCount, repCount, weightKg);
 
+            // An edit keeps the date from the original entry.
+            entry.loggedDate = editing ? savedEntry.loggedDate : LocalDate.now().toString();
+
             dialog.dismiss();
             runWorkoutTask(() -> {
                 if (editing) {
@@ -569,7 +576,8 @@ public class MainActivity extends AppCompatActivity {
 
         new AlertDialog.Builder(this)
                 .setTitle("Exercise details")
-                .setMessage(formatWorkout(entry))
+                .setMessage(formatWorkout(entry)
+                        + "\nLogged: " + formatLoggedDate(entry.loggedDate))
                 .setNeutralButton("Edit", (dialog, which) -> showWorkoutForm(entry))
                 .setNegativeButton("Delete", (dialog, which) -> confirmDeleteWorkout(entry))
                 .setPositiveButton("Close", null)
@@ -588,5 +596,14 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }, "Could not delete the exercise. Please try again."))
                 .show();
+    }
+
+    private String formatLoggedDate(String loggedDate) {
+        if (loggedDate == null) {
+            return "Date unknown";
+        }
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM);
+        return LocalDate.parse(loggedDate).format(formatter);
     }
 }

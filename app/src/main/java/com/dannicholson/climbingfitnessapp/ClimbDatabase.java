@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
 
 @Database(
         entities = {ClimbEntity.class, WorkoutEntity.class},
-        version = 2,
+        version = 3,
         exportSchema = false
 )
 public abstract class ClimbDatabase extends RoomDatabase {
@@ -25,6 +25,15 @@ public abstract class ClimbDatabase extends RoomDatabase {
                             + "reps INTEGER NOT NULL, "
                             + "weightKg REAL NOT NULL)"
             );
+        }
+    };
+
+    public static final Migration MIGRATION_2_3 = new Migration(2, 3) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            // Existing rows keep all their data and start with an unknown date.
+            database.execSQL("ALTER TABLE climbs ADD COLUMN loggedDate TEXT");
+            database.execSQL("ALTER TABLE workouts ADD COLUMN loggedDate TEXT");
         }
     };
 

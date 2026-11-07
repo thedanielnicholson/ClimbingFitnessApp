@@ -23,6 +23,9 @@ import static androidx.test.espresso.matcher.ViewMatchers.hasErrorText;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.junit.Assert.assertTrue;
+import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
+import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
+import static org.hamcrest.Matchers.containsString;
 
 @RunWith(AndroidJUnit4.class)
 public class ClimbSaveTest {
@@ -99,9 +102,15 @@ public class ClimbSaveTest {
                 .perform(scrollTo(), click());
 
         // Check that tapping the row shows the details we saved.
-        onView(withText("Grade: V3\nAttempts: 4\nNotes: Steep overhang"))
+        onView(withText(containsString(
+                "Grade: V3\nAttempts: 4\nNotes: Steep overhang\nLogged: "
+        )))
                 .inRoot(isDialog())
-                .check(matches(withText("Grade: V3\nAttempts: 4\nNotes: Steep overhang")));
+                .check(matches(isDisplayed()));
+
+        onView(withText(containsString("Logged: Date unknown")))
+                .inRoot(isDialog())
+                .check(doesNotExist());
     }
 
     @Test

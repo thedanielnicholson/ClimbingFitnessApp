@@ -13,7 +13,8 @@ public class ClimbEntity {
     // Each saved climb gets its own ID, even if its details match another.
     @PrimaryKey(autoGenerate = true)
     public long id;
-
+    // ISO date, such as 2026-11-07. Older entries have no recorded date.
+    public String loggedDate;
     public String grade;
     public int attempts;
     public String notes;

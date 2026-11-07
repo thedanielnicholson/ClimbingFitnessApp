@@ -1,6 +1,7 @@
 package com.dannicholson.climbingfitnessapp;
 
 import java.util.List;
+import java.time.LocalDate;
 
 /*
  * Handles saving and retrieving climbs.
@@ -25,7 +26,7 @@ public class ClimbRepository {
                 climb.getAttempts(),
                 climb.getNotes()
         );
-
+        entity.loggedDate = LocalDate.now().toString();
         // Room saves the row and returns its new ID.
         return climbDao.insert(entity);
     }

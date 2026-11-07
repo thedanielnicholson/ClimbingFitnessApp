@@ -11,6 +11,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNull;
 
 @RunWith(AndroidJUnit4.class)
 public class WorkoutMigrationTest {
@@ -35,7 +38,10 @@ public class WorkoutMigrationTest {
 
             ClimbDatabase upgraded = Room.databaseBuilder(
                     context, ClimbDatabase.class, testFile
-            ).addMigrations(ClimbDatabase.MIGRATION_1_2).build();
+            ).addMigrations(
+                    ClimbDatabase.MIGRATION_1_2,
+                    ClimbDatabase.MIGRATION_2_3
+            ).build();
 
             try {
                 ClimbEntity climb = upgraded.climbDao().getAll().get(0);
@@ -43,6 +49,7 @@ public class WorkoutMigrationTest {
                 assertEquals("V3", climb.grade);
                 assertEquals(4, climb.attempts);
                 assertEquals("Overhang", climb.notes);
+                assertNull(climb.loggedDate); // This climb was saved before dates were recorded.
 
                 long workoutId = upgraded.workoutDao().insert(
                         new WorkoutEntity("Pull-up", 3, 5, 7.5)
