@@ -22,4 +22,8 @@ public interface WorkoutDao {
 
     @Delete
     int delete(WorkoutEntity workout);
+
+    @Query("SELECT COUNT(*) FROM workouts "
+            + "WHERE loggedDate >= :startDate AND loggedDate < :endDate")
+    int countLoggedBetween(String startDate, String endDate);
 }

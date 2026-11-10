@@ -26,6 +26,8 @@ import android.widget.Toast;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import java.time.DayOfWeek;
+import java.time.temporal.TemporalAdjusters;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -86,6 +88,8 @@ public class MainActivity extends AppCompatActivity {
 
         database = ClimbDatabaseProvider.getDatabase(this);
         repository = new ClimbRepository(database.climbDao());
+        findViewById(R.id.weeklySummaryButton)
+                .setOnClickListener(this::showWeeklySummary);
 
         previewButton.setOnClickListener(view -> previewClimb());
         saveButton.setOnClickListener(view -> saveClimb());
@@ -605,5 +609,63 @@ public class MainActivity extends AppCompatActivity {
 
         DateTimeFormatter formatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM);
         return LocalDate.parse(loggedDate).format(formatter);
+    }
+
+    private void showWeeklySummary(View button) {
+        button.setEnabled(false);
+        databaseWork.increment();
+
+        databaseExecutor.execute(() -> {
+            String message;
+
+            try {
+                message = buildWeeklySummary();
+            } catch (Exception exception) {
+                Log.e("TrainingSummary", "Could not load weekly totals", exception);
+                message = "Could not load this week's totals. Please try again.";
+            }
+
+            String dialogMessage = message;
+
+            runOnUiThread(() -> {
+                try {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+
+                    button.setEnabled(true);
+                    new AlertDialog.Builder(this)
+                            .setTitle("This week")
+                            .setMessage(dialogMessage)
+                            .setPositiveButton("Close", null)
+                            .show();
+                } finally {
+                    // Let Espresso continue after the dialog has opened.
+                    databaseWork.decrement();
+                }
+            });
+        });
+    }
+
+    private String buildWeeklySummary() {
+        // Sunday still belongs to the week that started the previous Monday.
+        LocalDate monday = LocalDate.now().with(
+                TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)
+        );
+        LocalDate nextMonday = monday.plusWeeks(1);
+
+        int climbCount = database.climbDao().countLoggedBetween(
+                monday.toString(), nextMonday.toString()
+        );
+        int exerciseCount = database.workoutDao().countLoggedBetween(
+                monday.toString(), nextMonday.toString()
+        );
+
+        String firstDay = formatLoggedDate(monday.toString());
+        String lastDay = formatLoggedDate(nextMonday.minusDays(1).toString());
+
+        return firstDay + " to " + lastDay
+                + "\n\nClimbs logged: " + climbCount
+                + "\nExercises logged: " + exerciseCount;
     }
 }

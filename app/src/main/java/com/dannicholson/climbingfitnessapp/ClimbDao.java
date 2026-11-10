@@ -29,4 +29,8 @@ public interface ClimbDao {
     // Delete only the row with the selected climb's ID.
     @Query("DELETE FROM climbs WHERE id = :id")
     int deleteById(long id);
+
+    @Query("SELECT COUNT(*) FROM climbs "
+            + "WHERE loggedDate >= :startDate AND loggedDate < :endDate")
+    int countLoggedBetween(String startDate, String endDate);
 }
