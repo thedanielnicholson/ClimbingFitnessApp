@@ -31,6 +31,7 @@ import java.time.temporal.TemporalAdjusters;
 
 public class MainActivity extends AppCompatActivity {
 
+    // Fields, labels and buttons used by this screen.
     private EditText gradeInput;
     private EditText attemptsInput;
     private EditText notesInput;
@@ -41,8 +42,10 @@ public class MainActivity extends AppCompatActivity {
     private Button saveButton;
     private Button logWorkoutButton;
     private TextView workoutHistoryText;
+    // The database stores records; the repository handles climb operations.
     private ClimbDatabase database;
     private ClimbRepository repository;
+    // Reuse the same input checks when adding or editing climbs.
     private final ClimbValidator validator = new ClimbValidator();
     // Run database jobs one at a time, away from the screen thread.
     private final ExecutorService databaseExecutor =
@@ -52,10 +55,12 @@ public class MainActivity extends AppCompatActivity {
             new CountingIdlingResource("Climb database work");
     private LinearLayout workoutRows;
 
+    // Set up the screen and load the saved records when it opens.
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Load the layout and allow it to extend behind the system bars.
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
@@ -75,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
                 }
         );
 
+        // Connect the Java fields to the controls in activity_main.xml.
         gradeInput = findViewById(R.id.gradeInput);
         attemptsInput = findViewById(R.id.attemptsInput);
         notesInput = findViewById(R.id.notesInput);
@@ -86,11 +92,13 @@ public class MainActivity extends AppCompatActivity {
 
         Button previewButton = findViewById(R.id.previewButton);
 
+        // Get the shared database and prepare access to saved climbs.
         database = ClimbDatabaseProvider.getDatabase(this);
         repository = new ClimbRepository(database.climbDao());
         findViewById(R.id.weeklySummaryButton)
                 .setOnClickListener(this::showWeeklySummary);
 
+        // Choose what happens when each climb button is tapped.
         previewButton.setOnClickListener(view -> previewClimb());
         saveButton.setOnClickListener(view -> saveClimb());
 
@@ -112,7 +120,9 @@ public class MainActivity extends AppCompatActivity {
         runWorkoutTask(() -> {}, "Could not load saved exercises.");
     }
 
+    // Read and check the climb fields before previewing or saving.
     private Climb readClimbFromForm() {
+        // Trim spaces from the start and end of each entry.
         String grade = gradeInput.getText().toString().trim();
         String attemptsText = attemptsInput.getText().toString().trim();
         String notes = notesInput.getText().toString().trim();
@@ -123,6 +133,7 @@ public class MainActivity extends AppCompatActivity {
         gradeInput.setError(null);
         attemptsInput.setError(null);
 
+        // Stop here and highlight the field if the grade is invalid.
         String gradeError = validator.getGradeError(grade);
 
         if (gradeError != null) {
@@ -131,6 +142,7 @@ public class MainActivity extends AppCompatActivity {
             return null;
         }
 
+        // Check attempts before converting the text into a number.
         String attemptsError = validator.getAttemptsError(attemptsText);
 
         if (attemptsError != null) {
@@ -145,6 +157,7 @@ public class MainActivity extends AppCompatActivity {
         return new Climb(grade, attempts, notes);
     }
 
+    // Show the climb details without saving them.
     private void previewClimb() {
         Climb climb = readClimbFromForm();
 
@@ -160,6 +173,7 @@ public class MainActivity extends AppCompatActivity {
         ));
     }
 
+    // Save a valid climb and reload the history.
     private void saveClimb() {
         Climb climb = readClimbFromForm();
 
@@ -181,6 +195,7 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    // Build a clickable button for each saved climb.
     private void renderHistory(List<ClimbEntity> climbs) {
         // We're rebuilding the list after a load or save.
         // Clear the old buttons so entries don't appear twice.
@@ -192,6 +207,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        // Hide the empty-history message when there are climbs to display.
         historyText.setVisibility(View.GONE);
 
         for (ClimbEntity climb : climbs) {
@@ -208,6 +224,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Show the selected climb with edit and delete options.
     private void showClimbDetails(ClimbEntity climb) {
         new AlertDialog.Builder(this)
                 .setTitle("Climb details")
@@ -219,6 +236,7 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    // Turn climb values into text for the screen.
     private String formatClimb(String grade, int attempts, String notes) {
         // Use the same wording for previews and saved history.
         String displayedNotes =
@@ -229,17 +247,19 @@ public class MainActivity extends AppCompatActivity {
                 + "\nNotes: " + displayedNotes;
     }
 
+    // Run a climb database job without freezing the screen.
     private void runDatabaseTask(
             Callable<List<ClimbEntity>> task,
             String successMessage,
             String failureMessage
     ) {
+        // Prevent another Save tap and tell tests that work is pending.
         saveButton.setEnabled(false);
         databaseWork.increment();
 
         databaseExecutor.execute(() -> {
             try {
-                // Read the saved rows on the background thread.
+                // The supplied job may load, save, edit or delete a climb.
                 List<ClimbEntity> climbs = task.call();
                 finishDatabaseTask(climbs, successMessage);
             } catch (Exception exception) {
@@ -249,7 +269,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Show the result on the screen after the database job finishes.
     private void finishDatabaseTask(List<ClimbEntity> climbs, String message) {
+        // Android screen controls must be updated on the UI thread.
         runOnUiThread(() -> {
             try {
                 if (!isFinishing() && !isDestroyed()) {
@@ -262,16 +284,19 @@ public class MainActivity extends AppCompatActivity {
                     saveButton.setEnabled(true);
                 }
             } finally {
+                // Always balance the counter, even if the screen has closed.
                 databaseWork.decrement();
             }
         });
     }
 
+    // Give UI tests access to the database work counter.
     public CountingIdlingResource getDatabaseWork() {
         // UI tests register this so Espresso waits for database jobs.
         return databaseWork;
     }
 
+    // Clean up the worker when Android destroys this screen.
     @Override
     protected void onDestroy() {
         // Finish queued jobs, then stop this screen's worker thread.
@@ -281,6 +306,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    // Open an edit form filled with the selected climb.
     private void showEditClimbDialog(ClimbEntity savedClimb) {
         // Wait for any current save or history load to finish.
         if (!saveButton.isEnabled()) {
@@ -290,9 +316,11 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout fields = new LinearLayout(this);
         fields.setOrientation(LinearLayout.VERTICAL);
 
+        // Convert 24 dp to pixels so spacing suits the screen density.
         int padding = Math.round(24 * getResources().getDisplayMetrics().density);
         fields.setPadding(padding, 0, padding, 0);
 
+        // Fill the edit fields with the selected climb’s saved values.
         EditText grade = new EditText(this);
         grade.setHint("Grade");
         grade.setSingleLine(true);
@@ -328,14 +356,16 @@ public class MainActivity extends AppCompatActivity {
             grade.setError(null);
             attempts.setError(null);
 
-            String gradeError = validator.getGradeError(gradeText);
+            // Stop here and highlight the field if the grade is invalid.
+        String gradeError = validator.getGradeError(gradeText);
             if (gradeError != null) {
                 grade.setError(gradeError);
                 grade.requestFocus();
                 return;
             }
 
-            String attemptsError = validator.getAttemptsError(attemptsText);
+            // Check attempts before converting the text into a number.
+        String attemptsError = validator.getAttemptsError(attemptsText);
             if (attemptsError != null) {
                 attempts.setError(attemptsError);
                 attempts.requestFocus();
@@ -349,10 +379,12 @@ public class MainActivity extends AppCompatActivity {
             );
 
             dialog.dismiss();
+            // Use the original ID to update the correct record.
             updateClimb(savedClimb.id, editedClimb);
         });
     }
 
+    // Update the climb with this ID and refresh the list.
     private void updateClimb(long id, Climb editedClimb) {
         runDatabaseTask(
                 () -> database.runInTransaction(() -> {
@@ -365,6 +397,7 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    // Ask before deleting the selected climb.
     private void confirmDeleteClimb(ClimbEntity climb) {
         new AlertDialog.Builder(this)
                 .setTitle("Delete climb?")
@@ -374,6 +407,7 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    // Delete the selected climb and reload the remaining entries.
     private void deleteClimb(long id) {
         // The Save button is disabled while a database task is running.
         if (!saveButton.isEnabled()) {
@@ -391,13 +425,16 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    // Use the same form to add an exercise or edit an existing one.
     private void showWorkoutForm(WorkoutEntity savedEntry) {
         LinearLayout fields = new LinearLayout(this);
         fields.setOrientation(LinearLayout.VERTICAL);
 
+        // Convert 24 dp to pixels so spacing suits the screen density.
         int padding = Math.round(24 * getResources().getDisplayMetrics().density);
         fields.setPadding(padding, 0, padding, 0);
 
+        // Use text for the name and number keyboards for the other fields.
         EditText exercise = addWorkoutField(fields, "Exercise",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         EditText sets = addWorkoutField(fields, "Sets", InputType.TYPE_CLASS_NUMBER);
@@ -444,14 +481,17 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
+            // Accept a comma or dot as the decimal separator.
             double weightKg;
             try {
                 String weightText = weight.getText().toString().trim().replace(',', '.');
                 weightKg = Double.parseDouble(weightText);
             } catch (NumberFormatException exception) {
+                // Mark unreadable text as invalid for the check below.
                 weightKg = Double.NaN;
             }
 
+            // Reject invalid or negative weights; zero means bodyweight.
             if (!Double.isFinite(weightKg) || weightKg < 0) {
                 weight.setError("Enter a weight of 0 kg or more");
                 weight.requestFocus();
@@ -468,6 +508,7 @@ public class MainActivity extends AppCompatActivity {
                 if (editing) {
                     // Keep the original ID so Room updates the selected row.
                     entry.id = savedEntry.id;
+                    // Exactly one record should change. Otherwise, report a failure.
                     if (database.workoutDao().update(entry) != 1) {
                         throw new IllegalStateException("Exercise no longer exists");
                     }
@@ -478,6 +519,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Create an input field and add it to the exercise form.
     private EditText addWorkoutField(LinearLayout fields, String hint, int inputType) {
         EditText field = new EditText(this);
         field.setSingleLine(true);
@@ -487,6 +529,7 @@ public class MainActivity extends AppCompatActivity {
         return field;
     }
 
+    // Accept only whole numbers above zero for sets and reps.
     private Integer readPositiveCount(EditText field) {
         try {
             int count = Integer.parseInt(field.getText().toString().trim());
@@ -502,7 +545,9 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
+    // Apply an exercise change and reload its history in the background.
     private void runWorkoutTask(Runnable change, String failureMessage) {
+        // Prevent another Log exercise tap until the history has refreshed.
         logWorkoutButton.setEnabled(false);
         databaseWork.increment();
 
@@ -522,9 +567,12 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Update the exercise list or show an error on the screen.
     private void finishWorkoutTask(List<WorkoutEntity> entries, String error) {
+        // Android screen controls must be updated on the UI thread.
         runOnUiThread(() -> {
             try {
+                // Skip screen updates if this activity has already closed.
                 if (isFinishing() || isDestroyed()) {
                     return;
                 }
@@ -532,6 +580,7 @@ public class MainActivity extends AppCompatActivity {
                 if (error == null) {
                     renderWorkoutHistory(entries);
                 } else {
+                    // Keep any existing history visible if the request fails.
                     if (workoutRows.getChildCount() == 0) {
                         workoutHistoryText.setText(error);
                     }
@@ -546,6 +595,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Build a clickable button for each saved exercise.
     private void renderWorkoutHistory(List<WorkoutEntity> entries) {
         // Rebuild the buttons from the latest database rows.
         workoutRows.removeAllViews();
@@ -567,11 +617,13 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Show the exercise name, sets, reps and weight on one line.
     private String formatWorkout(WorkoutEntity entry) {
         return entry.exercise + " · " + entry.sets + " × " + entry.reps
                 + " · " + entry.weightKg + " kg";
     }
 
+    // Show the selected exercise with edit and delete options.
     private void showWorkoutDetails(WorkoutEntity entry) {
         // Wait for the history refresh before opening an entry.
         if (!logWorkoutButton.isEnabled()) {
@@ -588,6 +640,7 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    // Ask before deleting the selected exercise.
     private void confirmDeleteWorkout(WorkoutEntity entry) {
         new AlertDialog.Builder(this)
                 .setTitle("Delete exercise?")
@@ -602,7 +655,9 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    // Turn a stored date into the phone’s local date format.
     private String formatLoggedDate(String loggedDate) {
+        // Older records may have been saved before dates were added.
         if (loggedDate == null) {
             return "Date unknown";
         }
@@ -611,7 +666,9 @@ public class MainActivity extends AppCompatActivity {
         return LocalDate.parse(loggedDate).format(formatter);
     }
 
+    // Load this week’s totals and show them in a dialog.
     private void showWeeklySummary(View button) {
+        // Avoid opening the summary twice while its totals are loading.
         button.setEnabled(false);
         databaseWork.increment();
 
@@ -625,11 +682,13 @@ public class MainActivity extends AppCompatActivity {
                 message = "Could not load this week's totals. Please try again.";
             }
 
+            // Keep a fixed copy for the screen-update callback.
             String dialogMessage = message;
 
             runOnUiThread(() -> {
                 try {
-                    if (isFinishing() || isDestroyed()) {
+                    // Skip screen updates if this activity has already closed.
+                if (isFinishing() || isDestroyed()) {
                         return;
                     }
 
@@ -647,6 +706,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Count climbs and exercises logged during the current week.
     private String buildWeeklySummary() {
         // Sunday still belongs to the week that started the previous Monday.
         LocalDate monday = LocalDate.now().with(
@@ -654,9 +714,11 @@ public class MainActivity extends AppCompatActivity {
         );
         LocalDate nextMonday = monday.plusWeeks(1);
 
+        // Include this Monday and exclude next Monday. Undated rows are not counted.
         int climbCount = database.climbDao().countLoggedBetween(
                 monday.toString(), nextMonday.toString()
         );
+        // Count exercise entries, not the number of sets or reps.
         int exerciseCount = database.workoutDao().countLoggedBetween(
                 monday.toString(), nextMonday.toString()
         );
