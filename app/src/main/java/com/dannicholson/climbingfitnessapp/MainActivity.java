@@ -32,7 +32,10 @@ import java.time.temporal.TemporalAdjusters;
 
 public class MainActivity extends AppCompatActivity {
 
-    // Fields, labels and buttons used by this screen.
+    private EditText gradeInput;
+    private EditText attemptsInput;
+    private EditText notesInput;
+    private TextView summaryText;
     private TextView saveStatus;
     private TextView historyText;
     private LinearLayout historyRows;
@@ -77,22 +80,30 @@ public class MainActivity extends AppCompatActivity {
                 }
         );
 
-        // Connect the Java fields to the controls in activity_main.xml.
+        gradeInput = findViewById(R.id.gradeInput);
+        attemptsInput = findViewById(R.id.attemptsInput);
+        notesInput = findViewById(R.id.notesInput);
+        summaryText = findViewById(R.id.summaryText);
         saveStatus = findViewById(R.id.saveStatus);
         historyText = findViewById(R.id.historyText);
         historyRows = findViewById(R.id.historyRows);
         logClimbButton = findViewById(R.id.logClimbButton);
 
 
-
-        // Get the shared database and prepare access to saved climbs.
         database = ClimbDatabaseProvider.getDatabase(this);
         repository = new ClimbRepository(database.climbDao());
         findViewById(R.id.weeklySummaryButton)
                 .setOnClickListener(this::showWeeklySummary);
 
-        logClimbButton.setOnClickListener(view ->
-                startActivity(new Intent(this, LogClimbActivity.class)));
+        previewButton.setOnClickListener(view -> previewClimb());
+        saveButton.setOnClickListener(view -> saveClimb());
+
+        // Reload saved climbs whenever this screen opens.
+        runDatabaseTask(
+                repository::getAll,
+                "",
+                "Could not load climbs. Reopen the screen to try again."
+        );
 
         logWorkoutButton = findViewById(R.id.logWorkoutButton);
         workoutHistoryText = findViewById(R.id.workoutHistoryText);
@@ -112,7 +123,75 @@ public class MainActivity extends AppCompatActivity {
         runWorkoutTask(() -> {}, "Could not load saved exercises.");
     }
 
-    // Build a clickable button for each saved climb.
+    private Climb readClimbFromForm() {
+        String grade = gradeInput.getText().toString().trim();
+        String attemptsText = attemptsInput.getText().toString().trim();
+        String notes = notesInput.getText().toString().trim();
+
+        // Remove messages left by the previous entry.
+        summaryText.setText("");
+        saveStatus.setText("");
+        gradeInput.setError(null);
+        attemptsInput.setError(null);
+
+        String gradeError = validator.getGradeError(grade);
+
+        if (gradeError != null) {
+            gradeInput.setError(gradeError);
+            gradeInput.requestFocus();
+            return null;
+        }
+
+        String attemptsError = validator.getAttemptsError(attemptsText);
+
+        if (attemptsError != null) {
+            attemptsInput.setError(attemptsError);
+            attemptsInput.requestFocus();
+            return null;
+        }
+
+        int attempts = Integer.parseInt(attemptsText);
+
+        // Both buttons use the same checks and create the same object.
+        return new Climb(grade, attempts, notes);
+    }
+
+    private void previewClimb() {
+        Climb climb = readClimbFromForm();
+
+        // A null result means an input error was already shown.
+        if (climb == null) {
+            return;
+        }
+
+        summaryText.setText(formatClimb(
+                climb.getGrade(),
+                climb.getAttempts(),
+                climb.getNotes()
+        ));
+    }
+
+    private void saveClimb() {
+        Climb climb = readClimbFromForm();
+
+        if (climb == null) {
+            return;
+        }
+
+        runDatabaseTask(
+                () -> database.runInTransaction(() -> {
+                    /*
+                     * Save and read the updated history in one transaction.
+                     * If either operation fails, the transaction rolls back.
+                     */
+                    repository.save(climb);
+                    return repository.getAll();
+                }),
+                "Climb saved.",
+                "Could not save the climb. Please try again."
+        );
+    }
+
     private void renderHistory(List<ClimbEntity> climbs) {
         // We're rebuilding the list after a load or save.
         // Clear the old buttons so entries don't appear twice.
@@ -170,8 +249,7 @@ public class MainActivity extends AppCompatActivity {
             String successMessage,
             String failureMessage
     ) {
-        // Pause climb actions while the history is being refreshed.
-        logClimbButton.setEnabled(false);
+        saveButton.setEnabled(false);
         databaseWork.increment();
 
         databaseExecutor.execute(() -> {
@@ -237,8 +315,6 @@ public class MainActivity extends AppCompatActivity {
         int padding = Math.round(24 * getResources().getDisplayMetrics().density);
         fields.setPadding(padding, 0, padding, 0);
 
-        // Fill the edit fields with the selected climb’s saved values.
-        addFieldLabel(fields, "Grade");
         EditText grade = new EditText(this);
         grade.setHint("Grade");
         grade.setSingleLine(true);
@@ -444,35 +520,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private android.widget.ScrollView scrollForm(LinearLayout fields) {
-        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
-        scroll.addView(fields);
-        return scroll;
-    }
-
-    // Labels remain visible when the fields contain saved values.
-    private void addFieldLabel(LinearLayout fields, String text) {
-        TextView label = new TextView(this);
-        label.setText(text);
-        label.setTextSize(14);
-        android.content.res.TypedArray colours = obtainStyledAttributes(
-                new int[] { android.R.attr.textColorSecondary });
-        try { label.setTextColor(colours.getColorStateList(0)); }
-        finally { colours.recycle(); }
-        int gap = Math.round(12 * getResources().getDisplayMetrics().density);
-        label.setPadding(0, gap, 0, 0);
-        fields.addView(label);
-    }
-
-    private Button addDateField(LinearLayout fields, String date) {
-        addFieldLabel(fields, "Date");
-        Button button = new Button(this);
-        fields.addView(button);
-        LogDateField.bind(button, date);
-        return button;
-    }
-
-    // Create an input field and add it to the exercise form.
     private EditText addWorkoutField(LinearLayout fields, String hint, int inputType) {
         addFieldLabel(fields, hint);
         EditText field = new EditText(this);
