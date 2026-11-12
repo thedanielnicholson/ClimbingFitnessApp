@@ -201,6 +201,64 @@ public class ClimbSaveTest {
                 database.climbDao().getAll().get(0).loggedDate);
     }
 
+    // Editing must update the selected row and retain its original date.
+    @Test
+    public void editClimb_updatesExistingRowAndKeepsDate() {
+        ClimbEntity entry = new ClimbEntity("V3", 4, "Original notes");
+        entry.loggedDate = "2026-10-01";
+        long id = database.climbDao().insert(entry);
+        closeScreen();
+        openScreen();
+        onView(withText("V3 · 4 attempts")).perform(scrollTo(), click());
+        onView(withText("Edit")).inRoot(isDialog()).perform(click());
+        onView(withId(R.id.formTitle)).check(matches(withText("Edit climb")));
+        onView(withId(R.id.gradeInput)).check(matches(withText("V3")));
+        onView(withId(R.id.gradeInput)).perform(replaceText("V5"), closeSoftKeyboard());
+        onView(withId(R.id.saveButton)).check(matches(withText("Save changes")))
+                .perform(scrollTo(), click());
+        onView(withText("V5 · 4 attempts")).perform(scrollTo()).check(matches(isDisplayed()));
+        java.util.List<ClimbEntity> rows = database.climbDao().getAll();
+        org.junit.Assert.assertEquals(1, rows.size());
+        org.junit.Assert.assertEquals(id, rows.get(0).id);
+        org.junit.Assert.assertEquals("2026-10-01", rows.get(0).loggedDate);
+    }
+
+    // Cancelling an edit must not write any of the changed fields.
+    @Test
+    public void cancelWorkoutEdit_keepsOriginalValues() {
+        database.workoutDao().insert(new WorkoutEntity("Pull-up", 3, 5, 7.5));
+        closeScreen();
+        openScreen();
+        onView(withText("Pull-up · 3 × 5 · 7.5 kg")).perform(scrollTo(), click());
+        onView(withText("Edit")).inRoot(isDialog()).perform(click());
+        onView(withId(R.id.formTitle)).check(matches(withText("Edit exercise")));
+        onView(withId(R.id.setsInput)).check(matches(withText("3")))
+                .perform(replaceText("9"), closeSoftKeyboard());
+        onView(withId(R.id.cancelButton)).perform(scrollTo(), click());
+        onView(withText("Pull-up · 3 × 5 · 7.5 kg")).perform(scrollTo())
+                .check(matches(isDisplayed()));
+        org.junit.Assert.assertEquals(3, database.workoutDao().getAll().get(0).sets);
+    }
+
+    // Updating an older exercise must not silently assign today's date.
+    @Test
+    public void editWorkout_keepsIdAndUnknownDate() {
+        long id = database.workoutDao().insert(new WorkoutEntity("Pull-up", 3, 5, 7.5));
+        closeScreen();
+        openScreen();
+        onView(withText("Pull-up · 3 × 5 · 7.5 kg")).perform(scrollTo(), click());
+        onView(withText("Edit")).inRoot(isDialog()).perform(click());
+        onView(withId(R.id.loggedDateButton)).check(matches(withText("Date unknown — choose date")));
+        onView(withId(R.id.setsInput)).perform(scrollTo(), replaceText("4"), closeSoftKeyboard());
+        onView(withId(R.id.saveButton)).perform(scrollTo(), click());
+        onView(withText("Pull-up · 4 × 5 · 7.5 kg")).perform(scrollTo())
+                .check(matches(isDisplayed()));
+        java.util.List<WorkoutEntity> rows = database.workoutDao().getAll();
+        org.junit.Assert.assertEquals(1, rows.size());
+        org.junit.Assert.assertEquals(id, rows.get(0).id);
+        org.junit.Assert.assertNull(rows.get(0).loggedDate);
+    }
+
     private void openScreen() {
         scenario = ActivityScenario.launch(MainActivity.class);
 

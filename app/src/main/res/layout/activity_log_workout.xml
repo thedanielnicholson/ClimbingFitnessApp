@@ -7,7 +7,8 @@
         <Button android:id="@+id/backButton" android:layout_width="wrap_content"
             android:layout_height="wrap_content" android:text="← Back"
             android:contentDescription="Go back without saving" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        <!-- The title changes when this form is used for editing. -->
+        <TextView android:id="@+id/formTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="Log exercise" android:textSize="28sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:text="Exercise"

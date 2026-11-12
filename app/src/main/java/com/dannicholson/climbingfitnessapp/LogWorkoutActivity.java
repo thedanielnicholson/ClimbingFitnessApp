@@ -7,6 +7,7 @@ import android.widget.EditText;
 public class LogWorkoutActivity extends LogEntryActivity {
     private EditText exercise, sets, reps, weight;
 
+    // Connect the fields and show saved values only on the first opening.
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -15,9 +16,17 @@ public class LogWorkoutActivity extends LogEntryActivity {
         sets = findViewById(R.id.setsInput);
         reps = findViewById(R.id.repsInput);
         weight = findViewById(R.id.weightInput);
+        if (isEditing() && state == null) {
+            exercise.setText(getIntent().getStringExtra("exercise"));
+            sets.setText(String.valueOf(getIntent().getIntExtra("sets", 1)));
+            reps.setText(String.valueOf(getIntent().getIntExtra("reps", 1)));
+            weight.setText(String.valueOf(getIntent().getDoubleExtra("weightKg", 0)));
+        }
+        // Android restores unsaved text itself after rotation.
         findViewById(R.id.saveButton).setOnClickListener(view -> saveWorkout());
     }
 
+    // Check inputs before sending a change to the database.
     private void saveWorkout() {
         exercise.setError(null);
         sets.setError(null);
@@ -62,7 +71,18 @@ public class LogWorkoutActivity extends LogEntryActivity {
 
         entry.loggedDate = selectedDate();
         WorkoutDao dao = ClimbDatabaseProvider.getDatabase(this).workoutDao();
-        saveEntry(() -> dao.insert(entry));
+        long id = entryId();
+        // Keep the ID on edits so an identical entry is never changed by mistake.
+        saveEntry(() -> {
+            if (id > 0) {
+                entry.id = id;
+                if (dao.update(entry) != 1) {
+                    throw new IllegalStateException("Exercise no longer exists");
+                }
+            } else {
+                dao.insert(entry);
+            }
+        });
     }
 
     // Accept only whole numbers above zero for sets and reps.

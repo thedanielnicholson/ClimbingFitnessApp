@@ -9,6 +9,7 @@ public class LogClimbActivity extends LogEntryActivity {
     private TextView summaryText, saveStatus;
     private final ClimbValidator validator = new ClimbValidator();
 
+    // Connect the fields and fill them once when editing an existing climb.
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -18,6 +19,12 @@ public class LogClimbActivity extends LogEntryActivity {
         notesInput = findViewById(R.id.notesInput);
         summaryText = findViewById(R.id.summaryText);
         saveStatus = findViewById(R.id.saveStatus);
+        if (isEditing() && state == null) {
+            gradeInput.setText(getIntent().getStringExtra("grade"));
+            attemptsInput.setText(String.valueOf(getIntent().getIntExtra("attempts", 1)));
+            notesInput.setText(getIntent().getStringExtra("notes"));
+        }
+        // On rotation, Android restores the user's current field text instead.
         findViewById(R.id.previewButton).setOnClickListener(view -> previewClimb());
         findViewById(R.id.saveButton).setOnClickListener(view -> {
             Climb climb = readClimbFromForm();
@@ -25,7 +32,19 @@ public class LogClimbActivity extends LogEntryActivity {
                 ClimbRepository repository = new ClimbRepository(
                         ClimbDatabaseProvider.getDatabase(this).climbDao());
                 String date = selectedDate();
-                saveEntry(() -> repository.save(climb, date));
+                long id = entryId();
+                ClimbDatabase database = ClimbDatabaseProvider.getDatabase(this);
+                // Update values and date together, or insert a new record.
+                saveEntry(() -> {
+                    if (id > 0) {
+                        database.runInTransaction(() -> {
+                            repository.update(id, climb);
+                            database.climbDao().updateLoggedDate(id, date);
+                        });
+                    } else {
+                        repository.save(climb, date);
+                    }
+                });
             }
         });
     }

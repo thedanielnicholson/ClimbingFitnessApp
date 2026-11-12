@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.content.Intent;
 import android.util.Log;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
@@ -22,7 +21,6 @@ import android.view.View;
 import android.widget.LinearLayout;
 
 import androidx.appcompat.app.AlertDialog;
-import android.text.InputType;
 import android.widget.Toast;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -32,10 +30,6 @@ import java.time.temporal.TemporalAdjusters;
 
 public class MainActivity extends AppCompatActivity {
 
-    private EditText gradeInput;
-    private EditText attemptsInput;
-    private EditText notesInput;
-    private TextView summaryText;
     private TextView saveStatus;
     private TextView historyText;
     private LinearLayout historyRows;
@@ -45,8 +39,6 @@ public class MainActivity extends AppCompatActivity {
     // The database stores records; the repository handles climb operations.
     private ClimbDatabase database;
     private ClimbRepository repository;
-    // Reuse the same input checks when adding or editing climbs.
-    private final ClimbValidator validator = new ClimbValidator();
     // Run database jobs one at a time, away from the screen thread.
     private final ExecutorService databaseExecutor =
             Executors.newSingleThreadExecutor();
@@ -80,10 +72,6 @@ public class MainActivity extends AppCompatActivity {
                 }
         );
 
-        gradeInput = findViewById(R.id.gradeInput);
-        attemptsInput = findViewById(R.id.attemptsInput);
-        notesInput = findViewById(R.id.notesInput);
-        summaryText = findViewById(R.id.summaryText);
         saveStatus = findViewById(R.id.saveStatus);
         historyText = findViewById(R.id.historyText);
         historyRows = findViewById(R.id.historyRows);
@@ -95,15 +83,9 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.weeklySummaryButton)
                 .setOnClickListener(this::showWeeklySummary);
 
-        previewButton.setOnClickListener(view -> previewClimb());
-        saveButton.setOnClickListener(view -> saveClimb());
-
-        // Reload saved climbs whenever this screen opens.
-        runDatabaseTask(
-                repository::getAll,
-                "",
-                "Could not load climbs. Reopen the screen to try again."
-        );
+        // Open a blank climb form when logging a new entry.
+        logClimbButton.setOnClickListener(view ->
+                startActivity(new Intent(this, LogClimbActivity.class)));
 
         logWorkoutButton = findViewById(R.id.logWorkoutButton);
         workoutHistoryText = findViewById(R.id.workoutHistoryText);
@@ -123,75 +105,7 @@ public class MainActivity extends AppCompatActivity {
         runWorkoutTask(() -> {}, "Could not load saved exercises.");
     }
 
-    private Climb readClimbFromForm() {
-        String grade = gradeInput.getText().toString().trim();
-        String attemptsText = attemptsInput.getText().toString().trim();
-        String notes = notesInput.getText().toString().trim();
-
-        // Remove messages left by the previous entry.
-        summaryText.setText("");
-        saveStatus.setText("");
-        gradeInput.setError(null);
-        attemptsInput.setError(null);
-
-        String gradeError = validator.getGradeError(grade);
-
-        if (gradeError != null) {
-            gradeInput.setError(gradeError);
-            gradeInput.requestFocus();
-            return null;
-        }
-
-        String attemptsError = validator.getAttemptsError(attemptsText);
-
-        if (attemptsError != null) {
-            attemptsInput.setError(attemptsError);
-            attemptsInput.requestFocus();
-            return null;
-        }
-
-        int attempts = Integer.parseInt(attemptsText);
-
-        // Both buttons use the same checks and create the same object.
-        return new Climb(grade, attempts, notes);
-    }
-
-    private void previewClimb() {
-        Climb climb = readClimbFromForm();
-
-        // A null result means an input error was already shown.
-        if (climb == null) {
-            return;
-        }
-
-        summaryText.setText(formatClimb(
-                climb.getGrade(),
-                climb.getAttempts(),
-                climb.getNotes()
-        ));
-    }
-
-    private void saveClimb() {
-        Climb climb = readClimbFromForm();
-
-        if (climb == null) {
-            return;
-        }
-
-        runDatabaseTask(
-                () -> database.runInTransaction(() -> {
-                    /*
-                     * Save and read the updated history in one transaction.
-                     * If either operation fails, the transaction rolls back.
-                     */
-                    repository.save(climb);
-                    return repository.getAll();
-                }),
-                "Climb saved.",
-                "Could not save the climb. Please try again."
-        );
-    }
-
+    // Rebuild the saved-climb list after a database change.
     private void renderHistory(List<ClimbEntity> climbs) {
         // We're rebuilding the list after a load or save.
         // Clear the old buttons so entries don't appear twice.
@@ -227,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage(formatClimb(climb.grade, climb.attempts, climb.notes)
                         + "\nLogged: " + formatLoggedDate(climb.loggedDate))
                 .setPositiveButton("Close", null)
-                .setNeutralButton("Edit", (dialog, which) -> showEditClimbDialog(climb))
+                .setNeutralButton("Edit", (dialog, which) -> editClimb(climb))
                 .setNegativeButton("Delete", (dialog, which) -> confirmDeleteClimb(climb))
                 .show();
     }
@@ -249,7 +163,8 @@ public class MainActivity extends AppCompatActivity {
             String successMessage,
             String failureMessage
     ) {
-        saveButton.setEnabled(false);
+        // Pause climb actions until the history update finishes.
+        logClimbButton.setEnabled(false);
         databaseWork.increment();
 
         databaseExecutor.execute(() -> {
@@ -301,98 +216,16 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    // Open an edit form filled with the selected climb.
-    private void showEditClimbDialog(ClimbEntity savedClimb) {
-        // Wait for any current save or history load to finish.
-        if (!logClimbButton.isEnabled()) {
-            return;
-        }
-
-        LinearLayout fields = new LinearLayout(this);
-        fields.setOrientation(LinearLayout.VERTICAL);
-
-        // Convert 24 dp to pixels so spacing suits the screen density.
-        int padding = Math.round(24 * getResources().getDisplayMetrics().density);
-        fields.setPadding(padding, 0, padding, 0);
-
-        EditText grade = new EditText(this);
-        grade.setHint("Grade");
-        grade.setSingleLine(true);
-        grade.setText(savedClimb.grade);
-        fields.addView(grade);
-
-        addFieldLabel(fields, "Number of attempts");
-        EditText attempts = new EditText(this);
-        attempts.setHint("Number of attempts");
-        attempts.setInputType(InputType.TYPE_CLASS_NUMBER);
-        attempts.setText(String.valueOf(savedClimb.attempts));
-        fields.addView(attempts);
-
-        addFieldLabel(fields, "Notes (optional)");
-        EditText notes = new EditText(this);
-        notes.setHint("Notes (optional)");
-        notes.setText(savedClimb.notes);
-        fields.addView(notes);
-        Button loggedDate = addDateField(fields, savedClimb.loggedDate);
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Edit climb")
-                .setView(scrollForm(fields))
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Save changes", null)
-                .create();
-
-        dialog.show();
-
-        // Set the listener after show() so we can keep the dialog
-        // open when the user needs to correct a field.
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-            String gradeText = grade.getText().toString().trim();
-            String attemptsText = attempts.getText().toString().trim();
-
-            grade.setError(null);
-            attempts.setError(null);
-
-            // Stop here and highlight the field if the grade is invalid.
-        String gradeError = validator.getGradeError(gradeText);
-            if (gradeError != null) {
-                grade.setError(gradeError);
-                grade.requestFocus();
-                return;
-            }
-
-            // Check attempts before converting the text into a number.
-        String attemptsError = validator.getAttemptsError(attemptsText);
-            if (attemptsError != null) {
-                attempts.setError(attemptsError);
-                attempts.requestFocus();
-                return;
-            }
-
-            Climb editedClimb = new Climb(
-                    gradeText,
-                    Integer.parseInt(attemptsText),
-                    notes.getText().toString()
-            );
-
-            dialog.dismiss();
-            // Use the original ID to update the correct record.
-            updateClimb(savedClimb.id, editedClimb, LogDateField.value(loggedDate));
-        });
-    }
-
-    // Update the climb with this ID and refresh the list.
-    private void updateClimb(long id, Climb editedClimb, String loggedDate) {
-        runDatabaseTask(
-                () -> database.runInTransaction(() -> {
-                    repository.update(id, editedClimb);
-                    database.climbDao().updateLoggedDate(id, loggedDate);
-                    // Return fresh rows so the history shows the edit.
-                    return repository.getAll();
-                }),
-                "Climb updated.",
-                "Could not update the climb. Please try again."
-        );
+    // Send the selected climb's ID and values to the full-screen form.
+    private void editClimb(ClimbEntity climb) {
+        if (!logClimbButton.isEnabled()) return;
+        Intent intent = new Intent(this, LogClimbActivity.class);
+        intent.putExtra(LogEntryActivity.EXTRA_ENTRY_ID, climb.id);
+        intent.putExtra(LogEntryActivity.EXTRA_DATE, climb.loggedDate);
+        intent.putExtra("grade", climb.grade);
+        intent.putExtra("attempts", climb.attempts);
+        intent.putExtra("notes", climb.notes);
+        startActivity(intent);
     }
 
     // Ask before deleting the selected climb.
@@ -423,127 +256,17 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    // Use the same form to add an exercise or edit an existing one.
-    private void showWorkoutForm(WorkoutEntity savedEntry) {
-        LinearLayout fields = new LinearLayout(this);
-        fields.setOrientation(LinearLayout.VERTICAL);
-
-        // Convert 24 dp to pixels so spacing suits the screen density.
-        int padding = Math.round(24 * getResources().getDisplayMetrics().density);
-        fields.setPadding(padding, 0, padding, 0);
-
-        // Use text for the name and number keyboards for the other fields.
-        EditText exercise = addWorkoutField(fields, "Exercise",
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        EditText sets = addWorkoutField(fields, "Sets", InputType.TYPE_CLASS_NUMBER);
-        EditText reps = addWorkoutField(fields, "Reps per set", InputType.TYPE_CLASS_NUMBER);
-        EditText weight = addWorkoutField(fields, "Weight in kg (0 for bodyweight)",
-                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-
-        // A saved entry means we're editing. Otherwise, the fields start blank.
-        boolean editing = savedEntry != null;
-
-        if (editing) {
-            exercise.setText(savedEntry.exercise);
-            sets.setText(String.valueOf(savedEntry.sets));
-            reps.setText(String.valueOf(savedEntry.reps));
-            weight.setText(String.valueOf(savedEntry.weightKg));
-        }
-
-        Button loggedDate = addDateField(fields,
-                editing ? savedEntry.loggedDate : LocalDate.now().toString());
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(editing ? "Edit exercise" : "Log exercise")
-                .setView(scrollForm(fields))
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton(editing ? "Save changes" : "Save exercise", null)
-                .create();
-
-        dialog.show();
-
-        // Keep the dialog open if an input needs correcting.
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-            String name = exercise.getText().toString().trim();
-
-            if (name.isEmpty()) {
-                exercise.setError("Enter an exercise name");
-                exercise.requestFocus();
-                return;
-            }
-
-            Integer setCount = readPositiveCount(sets);
-            if (setCount == null) {
-                return;
-            }
-
-            Integer repCount = readPositiveCount(reps);
-            if (repCount == null) {
-                return;
-            }
-
-            // Accept a comma or dot as the decimal separator.
-            double weightKg;
-            try {
-                String weightText = weight.getText().toString().trim().replace(',', '.');
-                weightKg = Double.parseDouble(weightText);
-            } catch (NumberFormatException exception) {
-                // Mark unreadable text as invalid for the check below.
-                weightKg = Double.NaN;
-            }
-
-            // Reject invalid or negative weights; zero means bodyweight.
-            if (!Double.isFinite(weightKg) || weightKg < 0) {
-                weight.setError("Enter a weight of 0 kg or more");
-                weight.requestFocus();
-                return;
-            }
-
-            WorkoutEntity entry = new WorkoutEntity(name, setCount, repCount, weightKg);
-
-            // Keep the original date unless the user selects a different one.
-            entry.loggedDate = LogDateField.value(loggedDate);
-
-            dialog.dismiss();
-            runWorkoutTask(() -> {
-                if (editing) {
-                    // Keep the original ID so Room updates the selected row.
-                    entry.id = savedEntry.id;
-                    // Exactly one record should change. Otherwise, report a failure.
-                    if (database.workoutDao().update(entry) != 1) {
-                        throw new IllegalStateException("Exercise no longer exists");
-                    }
-                } else {
-                    database.workoutDao().insert(entry);
-                }
-            }, "Could not save the exercise. Please try again.");
-        });
-    }
-
-    private EditText addWorkoutField(LinearLayout fields, String hint, int inputType) {
-        addFieldLabel(fields, hint);
-        EditText field = new EditText(this);
-        field.setSingleLine(true);
-        field.setHint(hint);
-        field.setInputType(inputType);
-        fields.addView(field);
-        return field;
-    }
-
-    // Accept only whole numbers above zero for sets and reps.
-    private Integer readPositiveCount(EditText field) {
-        try {
-            int count = Integer.parseInt(field.getText().toString().trim());
-            if (count > 0) {
-                return count;
-            }
-        } catch (NumberFormatException exception) {
-            // Blank text and values too large for an int get the same message.
-        }
-
-        field.setError("Enter a whole number greater than 0");
-        field.requestFocus();
-        return null;
+    // Open the exercise form with the selected record ready to edit.
+    private void editWorkout(WorkoutEntity entry) {
+        if (!logWorkoutButton.isEnabled()) return;
+        Intent intent = new Intent(this, LogWorkoutActivity.class);
+        intent.putExtra(LogEntryActivity.EXTRA_ENTRY_ID, entry.id);
+        intent.putExtra(LogEntryActivity.EXTRA_DATE, entry.loggedDate);
+        intent.putExtra("exercise", entry.exercise);
+        intent.putExtra("sets", entry.sets);
+        intent.putExtra("reps", entry.reps);
+        intent.putExtra("weightKg", entry.weightKg);
+        startActivity(intent);
     }
 
     // Apply an exercise change and reload its history in the background.
@@ -635,7 +358,7 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle("Exercise details")
                 .setMessage(formatWorkout(entry)
                         + "\nLogged: " + formatLoggedDate(entry.loggedDate))
-                .setNeutralButton("Edit", (dialog, which) -> showWorkoutForm(entry))
+                .setNeutralButton("Edit", (dialog, which) -> editWorkout(entry))
                 .setNegativeButton("Delete", (dialog, which) -> confirmDeleteWorkout(entry))
                 .setPositiveButton("Close", null)
                 .show();
