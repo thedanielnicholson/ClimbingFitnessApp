@@ -18,61 +18,10 @@
             android:layout_marginBottom="16dp"
             android:text="This week" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Log a climb"
-            android:textSize="28sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/gradeInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:hint="Grade, e.g. V3"
-            android:inputType="textCapCharacters"
-            android:maxLines="1" />
-
-        <EditText
-            android:id="@+id/attemptsInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:hint="Number of attempts"
-            android:inputType="number"
-            android:maxLines="1" />
-
-        <EditText
-            android:id="@+id/notesInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:gravity="top"
-            android:hint="Notes (optional)"
-            android:inputType="textCapSentences|textMultiLine"
-            android:minLines="3" />
-
-        <Button
-            android:id="@+id/previewButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="Preview climb" />
-
-        <TextView
-            android:id="@+id/summaryText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:textSize="18sp" />
-
-        <Button
-            android:id="@+id/saveButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Save climb" />
+        <Button android:id="@+id/logClimbButton" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Log climb" />
+        <Button android:id="@+id/logWorkoutButton" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Log exercise" />
 
         <TextView
             android:id="@+id/saveStatus"
@@ -102,13 +51,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
-
-        <Button
-            android:id="@+id/logWorkoutButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Log exercise" />
 
         <TextView
             android:layout_width="match_parent"

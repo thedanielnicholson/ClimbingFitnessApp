@@ -39,7 +39,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.withText;
 public class ClimbFormTest {
 
     // Holds the running activity so we can close it after each test.
-    private ActivityScenario<MainActivity> scenario;
+    private ActivityScenario<LogClimbActivity> scenario;
 
     @Before
     public void openApp() {
@@ -50,7 +50,7 @@ public class ClimbFormTest {
          *
          * This does not clear a database or other permanent storage.
          */
-        scenario = ActivityScenario.launch(MainActivity.class);
+        scenario = ActivityScenario.launch(LogClimbActivity.class);
     }
 
     @After

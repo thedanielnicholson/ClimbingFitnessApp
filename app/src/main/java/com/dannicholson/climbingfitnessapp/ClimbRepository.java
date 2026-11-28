@@ -20,13 +20,17 @@ public class ClimbRepository {
     }
 
     public long save(Climb climb) {
+        return save(climb, LocalDate.now().toString());
+    }
+
+    public long save(Climb climb, String loggedDate) {
         // Copy the checked climb details into a database row.
         ClimbEntity entity = new ClimbEntity(
                 climb.getGrade(),
                 climb.getAttempts(),
                 climb.getNotes()
         );
-        entity.loggedDate = LocalDate.now().toString();
+        entity.loggedDate = loggedDate;
         // Room saves the row and returns its new ID.
         return climbDao.insert(entity);
     }

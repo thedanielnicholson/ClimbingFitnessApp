@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main" android:layout_width="match_parent"
+    android:layout_height="match_parent" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="24dp">
+        <Button android:id="@+id/backButton" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:text="← Back"
+            android:contentDescription="Go back without saving" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Log exercise" android:textSize="28sp" android:textStyle="bold" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Exercise"
+            android:textSize="14sp" android:textColor="?android:attr/textColorSecondary"
+            android:labelFor="@id/exerciseInput" />
+        <EditText android:id="@+id/exerciseInput" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="0dp"
+            android:hint="Exercise" android:inputType="textCapSentences" android:singleLine="true" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Sets"
+            android:textSize="14sp" android:textColor="?android:attr/textColorSecondary"
+            android:labelFor="@id/setsInput" />
+        <EditText android:id="@+id/setsInput" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="0dp"
+            android:hint="Sets" android:inputType="number" android:singleLine="true" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Reps per set"
+            android:textSize="14sp" android:textColor="?android:attr/textColorSecondary"
+            android:labelFor="@id/repsInput" />
+        <EditText android:id="@+id/repsInput" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="0dp"
+            android:hint="Reps per set" android:inputType="number" android:singleLine="true" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Weight (kg; 0 for bodyweight)"
+            android:textSize="14sp" android:textColor="?android:attr/textColorSecondary"
+            android:labelFor="@id/weightInput" />
+        <EditText android:id="@+id/weightInput" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="0dp"
+            android:hint="Weight in kg (0 for bodyweight)" android:inputType="numberDecimal" android:singleLine="true" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Date"
+            android:textSize="14sp" android:textColor="?android:attr/textColorSecondary"
+            android:labelFor="@id/loggedDateButton" />
+        <Button android:id="@+id/loggedDateButton" android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Button android:id="@+id/saveButton" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Save exercise" />
+        <TextView android:id="@+id/saveStatus" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:accessibilityLiveRegion="polite" />
+        <Button android:id="@+id/cancelButton" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Cancel" />
+    </LinearLayout>
+</ScrollView>

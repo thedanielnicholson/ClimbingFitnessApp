@@ -74,6 +74,7 @@ public class ClimbSaveTest {
 
     @Test
     public void savedClimb_appearsAfterReopeningScreen() {
+        onView(withId(R.id.logClimbButton)).perform(scrollTo(), click());
         onView(withId(R.id.gradeInput))
                 .perform(scrollTo(), replaceText("V3"),
                         closeSoftKeyboard());
@@ -90,8 +91,7 @@ public class ClimbSaveTest {
                 .perform(scrollTo(), click());
 
         // Espresso waits for the save and screen update to finish.
-        onView(withId(R.id.saveStatus))
-                .check(matches(withText("Climb saved.")));
+        onView(withText("V3 · 4 attempts")).perform(scrollTo()).check(matches(isDisplayed()));
 
         // Close and open the screen to exercise its history-loading path.
         closeScreen();
@@ -115,6 +115,7 @@ public class ClimbSaveTest {
 
     @Test
     public void invalidClimb_isNotSaved() {
+        onView(withId(R.id.logClimbButton)).perform(scrollTo(), click());
         // Leave the required fields blank and press Save.
         onView(withId(R.id.saveButton))
                 .perform(scrollTo(), click());
@@ -122,11 +123,82 @@ public class ClimbSaveTest {
         onView(withId(R.id.gradeInput))
                 .check(matches(hasErrorText("Enter a grade")));
 
+        Espresso.pressBack();
         onView(withId(R.id.historyText))
                 .check(matches(withText("No climbs saved yet.")));
 
         // Check the database too, rather than only trusting the screen.
         assertTrue(database.climbDao().getAll().isEmpty());
+    }
+
+    @Test
+    public void workoutSave_returnsToHistoryAndPersists() {
+        onView(withId(R.id.logWorkoutButton)).perform(scrollTo(), click());
+        onView(withId(R.id.exerciseInput)).perform(replaceText("Pull-up"), closeSoftKeyboard());
+        onView(withId(R.id.setsInput)).perform(replaceText("3"), closeSoftKeyboard());
+        onView(withId(R.id.repsInput)).perform(replaceText("5"), closeSoftKeyboard());
+        onView(withId(R.id.weightInput)).perform(replaceText("7,5"), closeSoftKeyboard());
+        onView(withId(R.id.saveButton)).perform(scrollTo(), click());
+        onView(withText("Pull-up · 3 × 5 · 7.5 kg")).perform(scrollTo())
+                .check(matches(isDisplayed()));
+        closeScreen();
+        openScreen();
+        onView(withText("Pull-up · 3 × 5 · 7.5 kg")).perform(scrollTo())
+                .check(matches(isDisplayed()));
+        org.junit.Assert.assertEquals(1, database.workoutDao().getAll().size());
+        org.junit.Assert.assertEquals(java.time.LocalDate.now().toString(),
+                database.workoutDao().getAll().get(0).loggedDate);
+    }
+
+    @Test
+    public void cancelClimb_discardsEntry() {
+        onView(withId(R.id.logClimbButton)).perform(scrollTo(), click());
+        onView(withId(R.id.gradeInput)).perform(replaceText("V4"), closeSoftKeyboard());
+        onView(withId(R.id.cancelButton)).perform(scrollTo(), click());
+        onView(withId(R.id.logClimbButton)).check(matches(isDisplayed()));
+        assertTrue(database.climbDao().getAll().isEmpty());
+    }
+
+    @Test
+    public void invalidWorkout_staysOpenAndBackDiscardsIt() {
+        onView(withId(R.id.logWorkoutButton)).perform(scrollTo(), click());
+        onView(withId(R.id.exerciseInput)).perform(replaceText("Pull-up"), closeSoftKeyboard());
+        onView(withId(R.id.setsInput)).perform(replaceText("0"), closeSoftKeyboard());
+        onView(withId(R.id.saveButton)).perform(scrollTo(), click());
+        onView(withId(R.id.setsInput)).check(matches(
+                hasErrorText("Enter a whole number greater than 0")));
+        onView(withId(R.id.setsInput)).perform(closeSoftKeyboard());
+        Espresso.pressBack();
+        onView(withId(R.id.logWorkoutButton)).check(matches(isDisplayed()));
+        assertTrue(database.workoutDao().getAll().isEmpty());
+    }
+
+    @Test
+    public void selectedClimbDate_isSaved() {
+        java.time.LocalDate yesterday = java.time.LocalDate.now().minusDays(1);
+        onView(withId(R.id.logClimbButton)).perform(scrollTo(), click());
+        onView(withId(R.id.gradeInput)).perform(replaceText("V2"), closeSoftKeyboard());
+        onView(withId(R.id.attemptsInput)).perform(replaceText("2"), closeSoftKeyboard());
+        onView(withId(R.id.loggedDateButton)).perform(scrollTo(), click());
+        onView(androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(
+                android.widget.DatePicker.class)).perform(new androidx.test.espresso.ViewAction() {
+            @Override public org.hamcrest.Matcher<android.view.View> getConstraints() {
+                return androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(
+                        android.widget.DatePicker.class);
+            }
+            @Override public String getDescription() { return "Choose yesterday"; }
+            @Override public void perform(androidx.test.espresso.UiController controller,
+                    android.view.View view) {
+                ((android.widget.DatePicker) view).updateDate(yesterday.getYear(),
+                        yesterday.getMonthValue() - 1, yesterday.getDayOfMonth());
+                controller.loopMainThreadUntilIdle();
+            }
+        });
+        onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click());
+        onView(withId(R.id.saveButton)).perform(scrollTo(), click());
+        onView(withText("V2 · 2 attempts")).perform(scrollTo()).check(matches(isDisplayed()));
+        org.junit.Assert.assertEquals(yesterday.toString(),
+                database.climbDao().getAll().get(0).loggedDate);
     }
 
     private void openScreen() {
